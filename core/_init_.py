@@ -1,1 +1,1 @@
-
+# core package initializer
