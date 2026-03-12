@@ -1,21 +1,40 @@
 # core/mappings.py
 
-def machine_to_technician(df, mapping):
-
-    tech = df.rename(columns=mapping)
-
-    tech.insert(0, "Step", range(1, len(tech)+1))
-
-    if "Notes" not in tech.columns:
-        tech["Notes"] = ""
-
-    return tech
+import pandas as pd
 
 
-def technician_to_machine(df, reverse_mapping):
+def convert_machine_to_technician(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Convert machine sequence CSV format into technician-friendly format.
 
-    machine = df.rename(columns=reverse_mapping)
+    This function preserves all original data but prepares the dataframe
+    for technician editing and Excel export.
+    """
 
-    machine = machine.drop(columns=["Step","Notes"], errors="ignore")
+    if df is None or df.empty:
+        return pd.DataFrame()
 
-    return machine
+    tech_df = df.copy()
+
+    # Ensure Step column is sorted
+    if "Step" in tech_df.columns:
+        tech_df = tech_df.sort_values("Step").reset_index(drop=True)
+
+    return tech_df
+
+
+def convert_technician_to_machine(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Convert technician-edited dataframe back into machine CSV format.
+    """
+
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    machine_df = df.copy()
+
+    # Ensure step order
+    if "Step" in machine_df.columns:
+        machine_df = machine_df.sort_values("Step").reset_index(drop=True)
+
+    return machine_df
