@@ -2,41 +2,32 @@
 
 import pandas as pd
 from io import BytesIO
-import importlib
-import subprocess
-import sys
+import importlib.util
 
 
-def _ensure_excel_engine():
+def _select_excel_engine():
     """
-    Ensure an Excel writer engine is available.
+    Select the best available Excel engine.
 
     Priority:
     1. xlsxwriter
     2. openpyxl
 
-    If neither exists, automatically install xlsxwriter.
+    The environment must provide at least one engine through
+    requirements.txt. Runtime installation is not attempted
+    because cloud environments are read-only.
     """
 
-    # Try xlsxwriter
     if importlib.util.find_spec("xlsxwriter") is not None:
         return "xlsxwriter"
 
-    # Try openpyxl
     if importlib.util.find_spec("openpyxl") is not None:
         return "openpyxl"
 
-    # Install xlsxwriter automatically
-    try:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "xlsxwriter"]
-        )
-    except Exception as e:
-        raise ImportError(
-            "Unable to install required Excel engine 'xlsxwriter'."
-        ) from e
-
-    return "xlsxwriter"
+    raise ImportError(
+        "No Excel writer engine available. "
+        "Add 'xlsxwriter' or 'openpyxl' to requirements.txt"
+    )
 
 
 def create_professional_excel(df, logo_path=None):
@@ -46,29 +37,28 @@ def create_professional_excel(df, logo_path=None):
     Parameters
     ----------
     df : pandas.DataFrame
-        Data to export.
+        Technician dataframe to export.
 
     logo_path : str | None
-        Optional company logo.
+        Optional path to company logo.
 
     Returns
     -------
     BytesIO
-        Excel file buffer suitable for Streamlit download.
+        Excel file buffer ready for Streamlit download.
     """
 
     output = BytesIO()
 
-    engine = _ensure_excel_engine()
+    engine = _select_excel_engine()
 
     with pd.ExcelWriter(output, engine=engine) as writer:
 
         df.to_excel(writer, index=False, sheet_name="Sequence")
 
-        workbook = writer.book
         worksheet = writer.sheets["Sequence"]
 
-        # Adjust column width dynamically
+        # Auto column sizing
         for i, col in enumerate(df.columns):
 
             try:
@@ -81,7 +71,7 @@ def create_professional_excel(df, logo_path=None):
 
             worksheet.set_column(i, i, max_len)
 
-        # Insert logo if engine supports it
+        # Insert logo if supported
         if logo_path and engine == "xlsxwriter":
             try:
                 worksheet.insert_image(
@@ -90,7 +80,6 @@ def create_professional_excel(df, logo_path=None):
                     {"x_scale": 0.5, "y_scale": 0.5}
                 )
             except Exception:
-                # Logo failure should not break export
                 pass
 
     output.seek(0)
