@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import os
 
-from io.csv_reader import safe_read_csv
-from io.excel_export import create_professional_excel
-from io.spec_scanner import scan_spec
+from data_io.csv_reader import safe_read_csv
+from data_io.excel_export import create_professional_excel
+from data_io.spec_scanner import scan_spec
 
 from core.mappings import convert_machine_to_technician, convert_technician_to_machine
 from core.safety import validate_safety
