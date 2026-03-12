@@ -1,42 +1,69 @@
 import streamlit as st
 import pandas as pd
 import os
+import sys
+
+# --------------------------------------------------
+# Ensure project root is in Python path
+# --------------------------------------------------
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(BASE_DIR)
+
+# --------------------------------------------------
+# Imports
+# --------------------------------------------------
 
 from data_io.csv_reader import safe_read_csv
 from data_io.excel_export import create_professional_excel
 from data_io.spec_scanner import scan_spec
 
-from core.mappings import convert_machine_to_technician, convert_technician_to_machine
+from core.mappings import (
+    convert_machine_to_technician,
+    convert_technician_to_machine
+)
+
 from core.safety import validate_safety
 
 from ui.editor import editable_dataframe
 
 
-BASE_DIR = os.path.dirname(__file__)
+# --------------------------------------------------
+# Templates
+# --------------------------------------------------
 
-MAIN_TEMPLATE = os.path.join(BASE_DIR,"templates/MainSealSet2.csv")
-SEP_TEMPLATE = os.path.join(BASE_DIR,"templates/SeperationSeal.csv")
+MAIN_TEMPLATE = os.path.join(BASE_DIR, "templates/MainSealSet2.csv")
+SEP_TEMPLATE = os.path.join(BASE_DIR, "templates/SeperationSeal.csv")
+LOGO_PATH = os.path.join(BASE_DIR, "templates/company_logo.png")
+
+
+# --------------------------------------------------
+# UI
+# --------------------------------------------------
 
 st.set_page_config(layout="wide")
+
 st.title("⚙️ Seal Test Manager")
 
+
 seal_type = st.sidebar.selectbox(
-"Seal Type",
-["Main Seal","Separation Seal"]
+    "Seal Type",
+    ["Main Seal", "Separation Seal"]
 )
 
-template = MAIN_TEMPLATE if seal_type=="Main Seal" else SEP_TEMPLATE
+template = MAIN_TEMPLATE if seal_type == "Main Seal" else SEP_TEMPLATE
+
 
 operation = st.sidebar.radio(
 
-"Operation",
+    "Operation",
 
-[
-"Download Template",
-"Machine CSV → Technician Excel",
-"Technician Excel → Machine CSV",
-"Spec → Technician Excel"
-]
+    [
+        "Download Template",
+        "Machine CSV → Technician Excel",
+        "Technician Excel → Machine CSV",
+        "Spec → Technician Excel"
+    ]
 
 )
 
@@ -45,7 +72,7 @@ operation = st.sidebar.radio(
 # DOWNLOAD TEMPLATE
 # --------------------------------------------------
 
-if operation=="Download Template":
+if operation == "Download Template":
 
     df = safe_read_csv(template)
 
@@ -53,7 +80,7 @@ if operation=="Download Template":
 
     excel = create_professional_excel(
         tech_df,
-        os.path.join(BASE_DIR,"templates/company_logo.png")
+        LOGO_PATH
     )
 
     st.download_button(
@@ -67,9 +94,12 @@ if operation=="Download Template":
 # MACHINE CSV → TECHNICIAN
 # --------------------------------------------------
 
-elif operation=="Machine CSV → Technician Excel":
+elif operation == "Machine CSV → Technician Excel":
 
-    uploaded = st.file_uploader("Upload Machine CSV",type=["csv"])
+    uploaded = st.file_uploader(
+        "Upload Machine CSV",
+        type=["csv"]
+    )
 
     if uploaded:
 
@@ -86,7 +116,7 @@ elif operation=="Machine CSV → Technician Excel":
 
         excel = create_professional_excel(
             edited,
-            os.path.join(BASE_DIR,"templates/company_logo.png")
+            LOGO_PATH
         )
 
         st.download_button(
@@ -100,9 +130,12 @@ elif operation=="Machine CSV → Technician Excel":
 # TECHNICIAN → MACHINE CSV
 # --------------------------------------------------
 
-elif operation=="Technician Excel → Machine CSV":
+elif operation == "Technician Excel → Machine CSV":
 
-    uploaded = st.file_uploader("Upload Technician Excel",type=["xlsx"])
+    uploaded = st.file_uploader(
+        "Upload Technician Excel",
+        type=["xlsx"]
+    )
 
     if uploaded:
 
@@ -112,7 +145,7 @@ elif operation=="Technician Excel → Machine CSV":
 
         machine_df = convert_technician_to_machine(edited)
 
-        csv = machine_df.to_csv(index=False,sep=";")
+        csv = machine_df.to_csv(index=False, sep=";")
 
         st.download_button(
             "Download Machine CSV",
@@ -125,9 +158,12 @@ elif operation=="Technician Excel → Machine CSV":
 # SPEC → TECHNICIAN
 # --------------------------------------------------
 
-elif operation=="Spec → Technician Excel":
+elif operation == "Spec → Technician Excel":
 
-    uploaded = st.file_uploader("Upload Spec (.xlsb)",type=["xlsb"])
+    uploaded = st.file_uploader(
+        "Upload Spec (.xlsb)",
+        type=["xlsb"]
+    )
 
     if uploaded:
 
@@ -142,7 +178,7 @@ elif operation=="Spec → Technician Excel":
 
         excel = create_professional_excel(
             edited,
-            os.path.join(BASE_DIR,"templates/company_logo.png")
+            LOGO_PATH
         )
 
         st.download_button(
