@@ -1,9 +1,6 @@
-import pandas as pd
+# data_io/spec_scanner.py
 
-try:
-    import pyxlsb
-except ImportError:
-    raise ImportError("Install pyxlsb: pip install pyxlsb")
+import pandas as pd
 
 
 def safe_get(row, idx):
@@ -20,6 +17,12 @@ def to_float(v):
 
 
 def scan_spec(file):
+
+    # Lazy dependency check (prevents Streamlit app crash on import)
+    try:
+        import pyxlsb  # noqa: F401
+    except ImportError:
+        raise ImportError("Install pyxlsb: pip install pyxlsb")
 
     sheets = pd.read_excel(
         file,
