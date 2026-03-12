@@ -13,14 +13,12 @@ import importlib.util
 
 def _get_excel_engine():
     """
-    Select available Excel writer engine.
+    Detect available Excel engine.
 
     Priority:
-    1. xlsxwriter (preferred because formatting features are used)
-    2. openpyxl (fallback if xlsxwriter unavailable)
-
-    This avoids runtime package installation which is not allowed
-    in cloud environments.
+    1. xlsxwriter
+    2. openpyxl
+    3. None -> let pandas auto-select
     """
 
     if importlib.util.find_spec("xlsxwriter") is not None:
@@ -29,10 +27,8 @@ def _get_excel_engine():
     if importlib.util.find_spec("openpyxl") is not None:
         return "openpyxl"
 
-    raise ImportError(
-        "No Excel engine available. Please add 'xlsxwriter' "
-        "or 'openpyxl' to requirements.txt"
-    )
+    # Allow pandas to auto-detect engine instead of crashing
+    return None
 
 
 # =====================================================
@@ -47,18 +43,21 @@ def create_professional_excel(df, logo_path=None):
 
     engine = _get_excel_engine()
 
-    with pd.ExcelWriter(output, engine=engine) as writer:
+    # If engine is None, pandas will attempt auto-selection
+    writer_kwargs = {"engine": engine} if engine else {}
+
+    with pd.ExcelWriter(output, **writer_kwargs) as writer:
 
         df.to_excel(writer, sheet_name="TEST_SEQUENCE", index=False)
 
-        wb = writer.book
         ws = writer.sheets["TEST_SEQUENCE"]
 
         # -------------------------------------------------
-        # If using xlsxwriter we can apply formatting
+        # Formatting only supported when using xlsxwriter
         # -------------------------------------------------
-
         if engine == "xlsxwriter":
+
+            wb = writer.book
 
             header = wb.add_format({
                 "bold": True,
@@ -84,7 +83,6 @@ def create_professional_excel(df, logo_path=None):
 
             # Write cells
             for r in range(1, len(df) + 1):
-
                 for c, col in enumerate(df.columns):
 
                     val = df.iloc[r - 1, c]
@@ -99,10 +97,7 @@ def create_professional_excel(df, logo_path=None):
 
             ws.set_column(0, len(df.columns) - 1, 18)
 
-            # -------------------------------------------------
-            # Instruction sheet (same behaviour as old version)
-            # -------------------------------------------------
-
+            # Instructions sheet
             instr = wb.add_worksheet("INSTRUCTIONS")
 
             if logo_path and os.path.exists(logo_path):
@@ -123,11 +118,14 @@ def create_professional_excel(df, logo_path=None):
             instr.write(15, 1, "2. Maintain safe pressure relationships")
             instr.write(16, 1, "3. Upload file back to system")
 
+        # -------------------------------------------------
+        # Fallback formatting for other engines
+        # -------------------------------------------------
         else:
-            # -------------------------------------------------
-            # openpyxl fallback (no formatting)
-            # -------------------------------------------------
-            ws.column_dimensions["A"].width = 18
+            try:
+                ws.column_dimensions["A"].width = 18
+            except Exception:
+                pass
 
     output.seek(0)
 
