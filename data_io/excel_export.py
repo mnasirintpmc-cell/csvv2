@@ -2,58 +2,64 @@
 
 import pandas as pd
 from io import BytesIO
+import importlib
+import subprocess
+import sys
 
 
-def _select_excel_engine():
+def _ensure_excel_engine():
     """
-    Select the best available Excel engine.
+    Ensure an Excel writer engine is available.
 
     Priority:
-    1. xlsxwriter (preferred for formatting)
-    2. openpyxl (fallback available in most environments)
+    1. xlsxwriter
+    2. openpyxl
 
-    This prevents runtime crashes if xlsxwriter is not installed.
+    If neither exists, automatically install xlsxwriter.
     """
 
-    try:
-        import xlsxwriter  # noqa: F401
+    # Try xlsxwriter
+    if importlib.util.find_spec("xlsxwriter") is not None:
         return "xlsxwriter"
-    except ImportError:
-        pass
 
-    try:
-        import openpyxl  # noqa: F401
+    # Try openpyxl
+    if importlib.util.find_spec("openpyxl") is not None:
         return "openpyxl"
-    except ImportError:
-        raise ImportError(
-            "No Excel writer engine available. Install one of the following:\n"
-            "pip install xlsxwriter\n"
-            "or\n"
-            "pip install openpyxl"
+
+    # Install xlsxwriter automatically
+    try:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "xlsxwriter"]
         )
+    except Exception as e:
+        raise ImportError(
+            "Unable to install required Excel engine 'xlsxwriter'."
+        ) from e
+
+    return "xlsxwriter"
 
 
 def create_professional_excel(df, logo_path=None):
     """
-    Create a professional Excel workbook for technicians.
+    Create a professional Excel workbook for technician sequences.
 
     Parameters
     ----------
     df : pandas.DataFrame
-        Technician dataframe to export.
+        Data to export.
 
     logo_path : str | None
-        Optional path to company logo.
+        Optional company logo.
 
     Returns
     -------
     BytesIO
-        Excel file buffer ready for Streamlit download.
+        Excel file buffer suitable for Streamlit download.
     """
 
     output = BytesIO()
 
-    engine = _select_excel_engine()
+    engine = _ensure_excel_engine()
 
     with pd.ExcelWriter(output, engine=engine) as writer:
 
@@ -62,20 +68,29 @@ def create_professional_excel(df, logo_path=None):
         workbook = writer.book
         worksheet = writer.sheets["Sequence"]
 
-        # Adjust column widths
+        # Adjust column width dynamically
         for i, col in enumerate(df.columns):
-            max_len = max(
-                df[col].astype(str).map(len).max(),
-                len(col)
-            ) + 2
+
+            try:
+                max_len = max(
+                    df[col].astype(str).map(len).max(),
+                    len(col)
+                ) + 2
+            except Exception:
+                max_len = len(col) + 2
+
             worksheet.set_column(i, i, max_len)
 
-        # Insert logo if supported and provided
+        # Insert logo if engine supports it
         if logo_path and engine == "xlsxwriter":
             try:
-                worksheet.insert_image("A1", logo_path, {"x_scale": 0.5, "y_scale": 0.5})
+                worksheet.insert_image(
+                    "A1",
+                    logo_path,
+                    {"x_scale": 0.5, "y_scale": 0.5}
+                )
             except Exception:
-                # Do not break export if logo fails
+                # Logo failure should not break export
                 pass
 
     output.seek(0)
