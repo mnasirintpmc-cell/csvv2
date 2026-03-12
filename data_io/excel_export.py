@@ -1,21 +1,26 @@
 # data_io/excel_export.py
 
 import pandas as pd
-from io import BytesIO
+import numpy as np
+import io
+import os
 import importlib.util
 
 
-def _select_excel_engine():
+# =====================================================
+# ENGINE DETECTION
+# =====================================================
+
+def _get_excel_engine():
     """
-    Select the best available Excel engine.
+    Select available Excel writer engine.
 
     Priority:
-    1. xlsxwriter
-    2. openpyxl
+    1. xlsxwriter (preferred because formatting features are used)
+    2. openpyxl (fallback if xlsxwriter unavailable)
 
-    The environment must provide at least one engine through
-    requirements.txt. Runtime installation is not attempted
-    because cloud environments are read-only.
+    This avoids runtime package installation which is not allowed
+    in cloud environments.
     """
 
     if importlib.util.find_spec("xlsxwriter") is not None:
@@ -25,62 +30,104 @@ def _select_excel_engine():
         return "openpyxl"
 
     raise ImportError(
-        "No Excel writer engine available. "
-        "Add 'xlsxwriter' or 'openpyxl' to requirements.txt"
+        "No Excel engine available. Please add 'xlsxwriter' "
+        "or 'openpyxl' to requirements.txt"
     )
 
 
+# =====================================================
+# PROFESSIONAL EXCEL EXPORT
+# =====================================================
+
 def create_professional_excel(df, logo_path=None):
-    """
-    Create a professional Excel workbook for technician sequences.
 
-    Parameters
-    ----------
-    df : pandas.DataFrame
-        Technician dataframe to export.
+    df = df.replace({np.nan: ""})
 
-    logo_path : str | None
-        Optional path to company logo.
+    output = io.BytesIO()
 
-    Returns
-    -------
-    BytesIO
-        Excel file buffer ready for Streamlit download.
-    """
-
-    output = BytesIO()
-
-    engine = _select_excel_engine()
+    engine = _get_excel_engine()
 
     with pd.ExcelWriter(output, engine=engine) as writer:
 
-        df.to_excel(writer, index=False, sheet_name="Sequence")
+        df.to_excel(writer, sheet_name="TEST_SEQUENCE", index=False)
 
-        worksheet = writer.sheets["Sequence"]
+        wb = writer.book
+        ws = writer.sheets["TEST_SEQUENCE"]
 
-        # Auto column sizing
-        for i, col in enumerate(df.columns):
+        # -------------------------------------------------
+        # If using xlsxwriter we can apply formatting
+        # -------------------------------------------------
 
-            try:
-                max_len = max(
-                    df[col].astype(str).map(len).max(),
-                    len(col)
-                ) + 2
-            except Exception:
-                max_len = len(col) + 2
+        if engine == "xlsxwriter":
 
-            worksheet.set_column(i, i, max_len)
+            header = wb.add_format({
+                "bold": True,
+                "align": "center",
+                "border": 1,
+                "fg_color": "#366092",
+                "font_color": "white"
+            })
 
-        # Insert logo if supported
-        if logo_path and engine == "xlsxwriter":
-            try:
-                worksheet.insert_image(
-                    "A1",
-                    logo_path,
-                    {"x_scale": 0.5, "y_scale": 0.5}
-                )
-            except Exception:
-                pass
+            cell = wb.add_format({
+                "border": 1,
+                "align": "center"
+            })
+
+            notes = wb.add_format({
+                "border": 1,
+                "align": "left"
+            })
+
+            # Write headers
+            for c, col in enumerate(df.columns):
+                ws.write(0, c, col, header)
+
+            # Write cells
+            for r in range(1, len(df) + 1):
+
+                for c, col in enumerate(df.columns):
+
+                    val = df.iloc[r - 1, c]
+
+                    if pd.isna(val):
+                        val = ""
+
+                    if col == "Notes":
+                        ws.write(r, c, str(val), notes)
+                    else:
+                        ws.write(r, c, val, cell)
+
+            ws.set_column(0, len(df.columns) - 1, 18)
+
+            # -------------------------------------------------
+            # Instruction sheet (same behaviour as old version)
+            # -------------------------------------------------
+
+            instr = wb.add_worksheet("INSTRUCTIONS")
+
+            if logo_path and os.path.exists(logo_path):
+
+                instr.set_row(0, 120)
+
+                try:
+                    instr.insert_image(
+                        "A1",
+                        logo_path,
+                        {"x_scale": 0.6, "y_scale": 0.6}
+                    )
+                except Exception:
+                    pass
+
+            instr.write(12, 1, "SEAL TEST SEQUENCE")
+            instr.write(14, 1, "1. Edit sequence as required")
+            instr.write(15, 1, "2. Maintain safe pressure relationships")
+            instr.write(16, 1, "3. Upload file back to system")
+
+        else:
+            # -------------------------------------------------
+            # openpyxl fallback (no formatting)
+            # -------------------------------------------------
+            ws.column_dimensions["A"].width = 18
 
     output.seek(0)
 
