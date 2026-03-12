@@ -1,43 +1,82 @@
+# data_io/excel_export.py
+
 import pandas as pd
-import numpy as np
-import io
-import os
+from io import BytesIO
 
 
-def create_professional_excel(df,logo_path):
+def _select_excel_engine():
+    """
+    Select the best available Excel engine.
 
-    df = df.replace({np.nan:""})
+    Priority:
+    1. xlsxwriter (preferred for formatting)
+    2. openpyxl (fallback available in most environments)
 
-    output = io.BytesIO()
+    This prevents runtime crashes if xlsxwriter is not installed.
+    """
 
-    with pd.ExcelWriter(output,engine="xlsxwriter") as writer:
+    try:
+        import xlsxwriter  # noqa: F401
+        return "xlsxwriter"
+    except ImportError:
+        pass
 
-        df.to_excel(writer,sheet_name="TEST_SEQUENCE",index=False)
+    try:
+        import openpyxl  # noqa: F401
+        return "openpyxl"
+    except ImportError:
+        raise ImportError(
+            "No Excel writer engine available. Install one of the following:\n"
+            "pip install xlsxwriter\n"
+            "or\n"
+            "pip install openpyxl"
+        )
 
-        wb = writer.book
-        ws = writer.sheets["TEST_SEQUENCE"]
 
-        header = wb.add_format({
+def create_professional_excel(df, logo_path=None):
+    """
+    Create a professional Excel workbook for technicians.
 
-            "bold":True,
-            "align":"center",
-            "border":1,
-            "fg_color":"#366092",
-            "font_color":"white"
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Technician dataframe to export.
 
-        })
+    logo_path : str | None
+        Optional path to company logo.
 
-        for c,col in enumerate(df.columns):
+    Returns
+    -------
+    BytesIO
+        Excel file buffer ready for Streamlit download.
+    """
 
-            ws.write(0,c,col,header)
+    output = BytesIO()
 
-        ws.set_column(0,len(df.columns)-1,18)
+    engine = _select_excel_engine()
 
-        if os.path.exists(logo_path):
+    with pd.ExcelWriter(output, engine=engine) as writer:
 
-            ws.insert_image("A1",logo_path,
-                {"x_scale":0.4,"y_scale":0.4}
-            )
+        df.to_excel(writer, index=False, sheet_name="Sequence")
+
+        workbook = writer.book
+        worksheet = writer.sheets["Sequence"]
+
+        # Adjust column widths
+        for i, col in enumerate(df.columns):
+            max_len = max(
+                df[col].astype(str).map(len).max(),
+                len(col)
+            ) + 2
+            worksheet.set_column(i, i, max_len)
+
+        # Insert logo if supported and provided
+        if logo_path and engine == "xlsxwriter":
+            try:
+                worksheet.insert_image("A1", logo_path, {"x_scale": 0.5, "y_scale": 0.5})
+            except Exception:
+                # Do not break export if logo fails
+                pass
 
     output.seek(0)
 
