@@ -1,40 +1,63 @@
 # core/safety.py
-
 import pandas as pd
 
 
-def validate_safety(df: pd.DataFrame):
+def validate_safety(df: pd.DataFrame) -> dict:
     """
-    Validate technician sequence for potential safety issues.
+    Validate technician sequence for safety issues.
 
-    Returns a list of warning messages that the UI can display.
-    The function does not modify the dataframe.
+    Returns:
+        dict with keys:
+            "errors"   - blockers that must be fixed before proceeding
+            "warnings" - advisories the technician should review
     """
-
+    errors = []
     warnings = []
 
     if df is None or df.empty:
-        warnings.append("Sequence is empty.")
-        return warnings
+        errors.append("Sequence is empty.")
+        return {"errors": errors, "warnings": warnings}
 
-    # Step order validation
+    # Step order
     if "Step" in df.columns:
         if not df["Step"].is_monotonic_increasing:
             warnings.append("Step numbers are not in ascending order.")
 
-    # Pressure validation
-    if "Primary seal Gas Pressure (barg)" in df.columns:
-        if (df["Primary seal Gas Pressure (barg)"] < 0).any():
-            warnings.append("Negative primary seal pressure detected.")
+    # Primary pressure — negative
+    pres_col = "Primary seal Gas Pressure (barg)"
+    if pres_col in df.columns:
+        if df[pres_col].isna().any():
+            bad = df.loc[df[pres_col].isna(), "Step"].tolist()
+            errors.append(f"Missing primary pressure on steps: {bad}")
+        if (df[pres_col].fillna(0) < 0).any():
+            errors.append("Negative primary seal pressure detected.")
 
-    # Duration validation
+    # Primary must exceed back pressure
+    if pres_col in df.columns and "BackPressure_Drive_End_bar" in df.columns:
+        mask = df[pres_col].fillna(0) <= df["BackPressure_Drive_End_bar"].fillna(0)
+        if mask.any():
+            bad = df.loc[mask, "Step"].tolist()
+            errors.append(
+                f"Primary pressure must exceed back pressure. Check steps: {bad}"
+            )
+
+    # Negative duration
     if "Duration_s" in df.columns:
-        if (df["Duration_s"] < 0).any():
-            warnings.append("Negative duration detected.")
+        if (df["Duration_s"].fillna(0) < 0).any():
+            errors.append("Negative duration detected.")
 
-    # Speed validation
+    # Negative speed
     if "Speed_RPM" in df.columns:
-        if (df["Speed_RPM"] < 0).any():
-            warnings.append("Negative speed value detected.")
+        if (df["Speed_RPM"].fillna(0) < 0).any():
+            errors.append("Negative speed value detected.")
 
-    return warnings
+    # Acceptance point with zero duration
+    if "Acceptance point" in df.columns and "Duration_s" in df.columns:
+        mask = (df["Acceptance point"] == 1) & (df["Duration_s"].fillna(0) == 0)
+        if mask.any():
+            bad = df.loc[mask, "Step"].tolist()
+            warnings.append(
+                f"Acceptance point steps with zero duration: {bad}"
+            )
+
+    return {"errors": errors, "warnings": warnings}
